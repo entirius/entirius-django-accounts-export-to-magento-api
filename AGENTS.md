@@ -4,8 +4,6 @@ Customer accounts export from Django Accounts to Magento via the Magento REST AP
 distribution `entirius-django-accounts-export-to-magento-api`, Django app
 `django_accounts_export_to_magento_api`. Celery-driven bulk export with per-customer status tracking.
 
-**Tech:** Python >=3.11, Django >=5.0, Celery, entirius-django-accounts, entirius-py-magento2-sdk2
-
 ## Commands
 
 | Command | Meaning |
@@ -25,6 +23,7 @@ distribution `entirius-django-accounts-export-to-magento-api`, Django app
   it is a schema contract.
 - Migrations are part of the public contract — never edit an already released migration.
 - Default: do not commit — git is the user's call.
+- No AI attribution in commits or PR descriptions.
 
 ## Architecture
 
@@ -47,6 +46,12 @@ Management command all-accounts-export-to-magento (direct or --celery)
 | `admin.py` | read-only admin for `CustomerInMagento`, `Channel` admin |
 | `settings.py` | Magento endpoint configuration |
 
+Runtime: Python >=3.11, Django >=5.0, Celery (`celery-once`), `django_accounts`, `django-allauth`, SDK `magento2_sdk2`.
+
+| Topic | Where |
+|---|---|
+| Log codes of the export process | `docs/log_codes.md` |
+
 ## Settings
 
 | Setting | Default | Purpose |
@@ -54,13 +59,15 @@ Management command all-accounts-export-to-magento (direct or --celery)
 | `MAGENTO2_URL_FOR_CHECKOUT_EXPORT` | `None` | Magento REST API base URL (required; log code 4005 when missing) |
 | `MAGENTO2_TOKEN_FOR_CHECKOUT_EXPORT` | `None` | Magento API token (required; log code 4005 when missing) |
 
-Log codes reference: `docs/log_codes.md`.
-
 ## Gotchas
 
 - `tasks.py` imports `celery_once` eagerly — the host needs `ONCE`/`CELERY_ONCE` settings even to
   import the module.
 - `utils/change_password.py` imports `allauth.account` — the host must have allauth installed
   (any host running `django_accounts` already does).
-- Export skips customers already marked successful in `CustomerInMagento` unless
-  `--force_all_accounts` is set; payload dedup uses `data_hash`.
+- Export skips every customer that has a `CustomerInMagento` row (successful or not) unless
+  `--force_all_accounts` is set; `data_hash` is stored from the Magento response and not read back.
+- The command declares `--force_all_accounts`, `--bulk_size` and `--celery` with `type=bool`: each takes a value and
+  any non-empty value is true, so a number for `--bulk_size` works only through `call_command(..., bulk_size=N)` or
+  the task itself.
+- The export stops (log code 4006) when a customer's source channel has no `Channel` row of this module.
